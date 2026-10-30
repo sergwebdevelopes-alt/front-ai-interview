@@ -10,6 +10,7 @@ Up-to-date MUI docs for AI agents: https://mui.com/material-ui/llms.txt (an inde
 
 ```bash
 npm install
+cp .env.example .env   # VITE_API_BASE_URL
 npm run dev        # http://localhost:5173
 npm run typecheck
 npm run lint
