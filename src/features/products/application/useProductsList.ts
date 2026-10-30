@@ -1,6 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRequest } from '@/shared/hooks/useRequest.ts'
-import { PAGE_SIZE, clampPage, pageToSkip, skipToPage } from '@/features/products/domain/pagination.ts'
+import {
+  PAGE_SIZE,
+  clampPage,
+  isPastLastPage,
+  lastPageSkip,
+  pageToSkip,
+  skipToPage,
+} from '@/features/products/domain/pagination.ts'
 import { nextSort } from '@/features/products/domain/sort.ts'
 import type { SortField } from '@/features/products/domain/sort.ts'
 import { productsRepository, useCatalogState } from '@/features/products/infrastructure/index.ts'
@@ -22,6 +29,14 @@ export function useProductsList() {
   const [total, setTotal] = useState<number | null>(null)
   if (data && data.total !== total) setTotal(data.total)
 
+  const loadedTotal = data?.total ?? null
+  const isPastEnd = loadedTotal !== null && isPastLastPage(skip, loadedTotal)
+
+  useEffect(() => {
+    if (loadedTotal === null || !isPastLastPage(skip, loadedTotal)) return
+    update({ skip: lastPageSkip(loadedTotal) }, { history: 'replace' })
+  }, [skip, loadedTotal, update])
+
   const setPage = (page: number) => update({ skip: pageToSkip(page) })
 
   const toggleSort = (field: SortField) => update({ sort: nextSort(sort, field), skip: 0 })
@@ -29,12 +44,12 @@ export function useProductsList() {
   const clearSearch = () => update({ query: '', skip: 0 }, { history: 'replace' })
 
   return {
-    products: data?.items ?? [],
+    products: isPastEnd ? [] : (data?.items ?? []),
     total,
     page: clampPage(skipToPage(skip), total),
     sort,
     query,
-    isLoading,
+    isLoading: isLoading || isPastEnd,
     error,
     retry,
     setPage,

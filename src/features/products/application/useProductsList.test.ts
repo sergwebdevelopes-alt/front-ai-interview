@@ -106,12 +106,58 @@ describe('useProductsList paging', () => {
     expect(result.current.isLoading).toBe(false)
   })
 
-  it('clamps the page when skip is past the end', async () => {
+  it('jumps to the last page when skip is past the end, without a history entry', async () => {
     setUrl('/?skip=500')
+    const length = window.history.length
+    repository.getCatalog.mockImplementation(async ({ skip }) =>
+      skip >= 194 ? page(194, []) : page(194, [item]),
+    )
     const { result } = renderHook(() => useProductsList())
 
-    await waitFor(() => expect(result.current.total).toBe(194))
-    expect(result.current.page).toBe(9)
+    await waitFor(() => expect(urlParams().get('skip')).toBe('180'))
+    expect(window.history.length).toBe(length)
+    await waitFor(() => expect(result.current.products).toEqual([item]))
+
+    expect(repository.getCatalog).toHaveBeenLastCalledWith(
+      { skip: 180, limit: 20, sort: null },
+      expect.any(AbortSignal),
+    )
+    expect(result.current).toMatchObject({ page: 9, isLoading: false })
+  })
+
+  it('keeps showing loading instead of an empty page while jumping', async () => {
+    setUrl('/?skip=500')
+    const lastPage = deferred<ProductListPage>()
+    repository.getCatalog.mockResolvedValueOnce(page(194, [])).mockReturnValueOnce(lastPage.promise)
+    const { result } = renderHook(() => useProductsList())
+
+    await waitFor(() => expect(urlParams().get('skip')).toBe('180'))
+    expect(result.current).toMatchObject({ isLoading: true, products: [] })
+
+    await act(async () => lastPage.resolve(page(194)))
+    expect(result.current).toMatchObject({ isLoading: false, products: [item] })
+  })
+
+  it('goes to the first page when a search past the first page finds nothing', async () => {
+    setUrl('/?q=zzzz&skip=40')
+    repository.search.mockResolvedValue(page(0, []))
+    const { result } = renderHook(() => useProductsList())
+
+    await waitFor(() => expect(urlParams().has('skip')).toBe(false))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(urlParams().get('q')).toBe('zzzz')
+    expect(result.current).toMatchObject({ page: 0, products: [], total: 0 })
+  })
+
+  it('does not change the URL for a page inside the range', async () => {
+    setUrl('/?skip=180')
+    const { result } = renderHook(() => useProductsList())
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(urlParams().get('skip')).toBe('180')
+    expect(repository.getCatalog).toHaveBeenCalledOnce()
   })
 })
 

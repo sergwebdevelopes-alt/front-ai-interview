@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { PAGE_SIZE, clampPage, normalizeSkip, pageToSkip, skipToPage } from './pagination.ts'
+import {
+  PAGE_SIZE,
+  clampPage,
+  isPastLastPage,
+  lastPageSkip,
+  normalizeSkip,
+  pageToSkip,
+  skipToPage,
+} from './pagination.ts'
 
 describe('normalizeSkip', () => {
   it.each([
@@ -44,5 +52,35 @@ describe('clampPage', () => {
 
   it('treats an exact multiple of the page size correctly', () => {
     expect(clampPage(5, 40)).toBe(1)
+  })
+})
+
+describe('lastPageSkip', () => {
+  it.each([
+    [194, 180],
+    [200, 180],
+    [201, 200],
+    [20, 0],
+    [1, 0],
+    [0, 0],
+  ])('total %i → last page starts at %i', (total, expected) => {
+    expect(lastPageSkip(total)).toBe(expected)
+  })
+})
+
+describe('isPastLastPage', () => {
+  it('is false on and before the last page', () => {
+    expect(isPastLastPage(0, 194)).toBe(false)
+    expect(isPastLastPage(180, 194)).toBe(false)
+  })
+
+  it('is true after the last page', () => {
+    expect(isPastLastPage(200, 194)).toBe(true)
+    expect(isPastLastPage(500, 194)).toBe(true)
+  })
+
+  it('treats any page after the first as past the end of an empty result', () => {
+    expect(isPastLastPage(0, 0)).toBe(false)
+    expect(isPastLastPage(20, 0)).toBe(true)
   })
 })
