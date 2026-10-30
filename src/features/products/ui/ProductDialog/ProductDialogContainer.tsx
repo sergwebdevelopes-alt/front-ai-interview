@@ -1,5 +1,5 @@
 import { useProductDetails } from '@/features/products/application/useProductDetails.ts'
-import { LazyProductDialog } from '@/features/products/ui/ProductDialog/LazyProductDialog.tsx'
+import { LazyProductDialog } from './LazyProductDialog.tsx'
 
 export function ProductDialogContainer() {
   const details = useProductDetails()

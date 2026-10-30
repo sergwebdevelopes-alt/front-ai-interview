@@ -1,5 +1,5 @@
 import { useProductSearch } from '@/features/products/application/useProductSearch.ts'
-import { ProductsSearch } from '@/features/products/ui/ProductsSearch.tsx'
+import { ProductsSearch } from './ProductsSearch.tsx'
 
 export function ProductsSearchContainer() {
   const search = useProductSearch()

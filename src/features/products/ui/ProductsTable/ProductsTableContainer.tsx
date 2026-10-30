@@ -2,7 +2,7 @@ import { ErrorBoundary } from '@/shared/ui/ErrorBoundary.tsx'
 import { useOpenProduct } from '@/features/products/application/useOpenProduct.ts'
 import { useProductsList } from '@/features/products/application/useProductsList.ts'
 import { PAGE_SIZE } from '@/features/products/domain/pagination.ts'
-import { ProductsTable } from '@/features/products/ui/ProductsTable/ProductsTable.tsx'
+import { ProductsTable } from './ProductsTable.tsx'
 
 export function ProductsTableContainer() {
   const list = useProductsList()

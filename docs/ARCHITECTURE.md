@@ -29,6 +29,7 @@ src/
       ErrorBoundary.tsx           # render-error boundary, fallback ErrorAlert, resetKey
       CloseIcon.tsx               # close icon (SvgIcon, no icon library)
       focusRing.ts                # shared keyboard-focus outline style
+      visuallyHidden.ts           # style for screen-reader-only content
   features/products/
     domain/                       # pure TS: no React, fetch or URL
       product.ts                  # Product, Review, ProductListItem, ProductListPage
@@ -44,18 +45,20 @@ src/
       index.ts                    # the one place that picks implementations
     application/                  # use cases as hooks
       useProductsList.ts, useProductSearch.ts, useProductDetails.ts, useOpenProduct.ts
-    containers/                   # wire one use case to one ui component
-      ProductsSearchContainer.tsx, ProductsTableContainer.tsx, ProductDialogContainer.tsx
-    ui/                           # rendering only
+    ui/                           # components; *Container files wire a use case, the rest only render
       utils.ts                    # formatPrice, formatDate
-      ProductsSearch.tsx
-      ProductsTable/              # ProductsTable, columns (config, px widths), TableStateRows, SingleLineText
-      ProductDialog/              # ProductDialog, LazyProductDialog, one component per section, Section/InfoRow
+      ProductsSearch/             # ProductsSearch, ProductsSearchContainer
+      ProductsTable/              # ProductsTable, ProductsTableContainer, columns (config, px widths),
+                                  # TableStateRows, SingleLineText, resultsAnnouncement (live-region text)
+      ProductDialog/              # ProductDialog, ProductDialogContainer, LazyProductDialog,
+                                  # one component per section, Section/InfoRow
   test/                           # test-only helpers (not in the app build)
     setup.ts                      # jest-dom matchers; after each test: cleanup, cache clear, URL reset
     fakeProductsRepository.ts     # typed vi.fn repository + deferred()
+    inMemoryProductsRepository.ts # makeCatalog(n) + repository with real paging, sort, search, 404
     productFixtures.ts            # makeListItem(), makeProduct()
-  App.tsx                         # layout only: renders the containers
+  App.tsx                         # layout only: renders the *Container components
+  App.test.tsx                    # full-app tests with the in-memory repository
   main.tsx                        # theme, CssBaseline, root ErrorBoundary
 ```
 
@@ -63,29 +66,30 @@ Tests live next to the code as `*.test.ts(x)` (for example `domain/sort.test.ts`
 
 ### Layers and data flow
 
-`containers → application → domain ← infrastructure`, and `containers → ui`. `App.tsx` only lays out the containers; each container calls its use case and passes the result to a `ui` component, so state changes re-render only that part of the page (typing re-renders the search input; opening a product re-renders the dialog, not the table).
+`ui → application → domain ← infrastructure`. `App.tsx` only lays out the three `*Container` components; each container calls its use case and passes the result to the presentational component next to it, so state changes re-render only that part of the page (typing re-renders the search input; opening a product re-renders the dialog, not the table).
 
 - `domain` holds the types, the business rules and the interfaces (`ProductsRepository`, `CatalogState`, `ProductSelection`). It doesn't depend on anything else.
 - `infrastructure` implements those interfaces. `infrastructure/index.ts` exports only the chosen implementations (`productsRepository`, `useCatalogState`, `useProductSelection`, `useProductSelectionActions`). `useProductSelectionActions` only writes and doesn't subscribe, so the table can open a product without re-rendering when it changes. Switching a source, for example `?productId` → React state, means writing a new implementation and changing one line in `index.ts`. A non-URL implementation of `CatalogState` must be a shared store, because several hooks read it.
-- `application` hooks import implementations only from `infrastructure/index.ts`, never from the URL, `fetch` or `HttpError`. They hold the business rules: the empty query → `getCatalog`, otherwise `search`; a sort change or a new query resets `skip`.
-- `ui` components only render props and call callbacks.
+- `application` hooks import implementations only from `infrastructure/index.ts`, never from the URL, `fetch` or `HttpError`. They hold the business rules: the empty query → `getCatalog`, otherwise `search`; a sort change or a new query resets `skip`; a `skip` past the last page is corrected to the last page.
+- In `ui`, only `*Container` components import from `application`; all other components only render props and call callbacks.
 - Requests go through `shared/hooks/useRequest`. Each request has a key built from all its inputs, prefixed per use case (`products:`, `product:`), and its own `AbortController`; a response for an outdated key is ignored. Successful responses go into `shared/cache/requestCache`: cached data shows immediately, entries older than 5 minutes are refreshed in the background, a failed refresh keeps the cached data, and Retry bypasses the cache.
 - The product dialog is loaded with `React.lazy` on first open (`LazyProductDialog`) and stays mounted afterwards. While closing, it keeps showing its last content (`useLastActiveValue`).
 - Render errors are caught by `ErrorBoundary` at three levels: the root (`main.tsx`), the table and the dialog content. The fallback is `ErrorAlert` with Retry; the table resets on query/page/sort change, the dialog on product change.
-- `httpProvider` is a plain object that wraps `fetch` and implements the `HttpProvider` interface. There is no DI. For now it has only `get`. The base URL comes from `config.apiBaseUrl` (`VITE_API_BASE_URL` in `.env`; `.env` is git-ignored, `.env.example` is committed as the template). On a non-2xx response it throws an `HttpError` (status and the API `message`); errors are built in `httpError.ts`. The repository turns a 404 on `getById` into `ProductNotFoundError`.
+- `httpProvider` is a plain object that wraps `fetch` and implements the `HttpProvider` interface. There is no DI. For now it has only `get`. The base URL comes from `config.apiBaseUrl` (`VITE_API_BASE_URL` in `.env`; `.env` is git-ignored, `.env.example` is committed as the template). On a non-2xx response it throws an `HttpError` (status and the API `message`); errors are built in `httpError.ts`. Every request times out after `config.httpTimeoutMs` (5 s; `timeoutMs` per call overrides it) and then throws `RequestTimeoutError`; the timeout is combined with the caller's abort signal, and a cancel is not reported as a timeout. The repository turns a 404 on `getById` into `ProductNotFoundError`.
 - Catalog is a short table with the columns brand, model, description, category and price. The list request asks only for these fields (`select=brand,title,description,category,price`). Model is `title`. A missing `brand` is shown as "—".
 - Pagination is server-side: 20 per page, `limit=20&skip=…`.
 - Opening the modal makes a separate request, `GET /products/:id`, and the modal shows all the product's data.
 
 ### UI state in the URL
 
-`?q=phone&sortBy=price&order=asc&skip=20&productId=12`: `q` is the search query, `sortBy` and `order` the sort, `skip` the current page offset. `productId` is present only while the modal is open. Several params changed together are written as one history entry (`updateQueryParams`).
+`?q=phone&sortBy=price&order=asc&skip=20&productId=12`: `q` is the search query, `sortBy` and `order` the sort, `skip` the current page offset. `productId` is present only while the modal is open. Several params changed together are written as one history entry (`updateQueryParams`). A `skip` past the last page is replaced (`replaceState`) with the last page once the total is known.
 
 ### Loading, error and empty states
 
 - Table: `Skeleton` rows while loading; an `ErrorAlert` (an `Alert` with a Retry button) on error (for example, catalog unavailable); a single "No products" row when the list is empty, or "No results for …" with a Clear search button when a search finds nothing.
 - Dialog: the same pattern inside `DialogContent`. If the product is not found (404), it shows "Product not found". A ✕ button (`aria-label="Close"`), the Close button, Esc and a click outside close it.
 - Keyboard: table rows open the product with Enter or Space. Rows and sort headers have a visible outline on keyboard focus.
+- Screen readers: the table is named "Products" and has `aria-busy` while loading; a polite live region (`role="status"`) announces the result after each load ("194 products, page 2 of 10", "23 results for “phone”, page 1 of 2", "No results for …") and is empty while loading. A request timeout shows the usual `ErrorAlert` ("Request timed out after 5 s") with Retry.
 
 ### Naming
 
@@ -265,3 +269,28 @@ Entries are added by the agent once the candidate confirms them. The format is d
 - Context: the project had no test runner; the code should be covered by tests.
 - Decision: Vitest + Testing Library (`@testing-library/react`, `user-event`, `jest-dom`) + jsdom as exact-version devDependencies. Config in `vite.config.ts` (`test` block, reuses the `@/` alias and React plugin); `tsconfig.test.json` type-checks tests, `tsconfig.app.json` excludes them. Tests live next to the code as `*.test.ts(x)` and cover every layer: domain, shared, infrastructure, application, ui. Use-case tests swap only `productsRepository` by mocking `infrastructure/index.ts` and keep the real URL hooks; `requestCache.clear()` runs after each test. Scripts: `npm test`, `npm run test:watch`.
 - Why: covers logic, hooks and components with the existing Vite setup. Vitest only (no hooks/components) and Vitest + jsdom without Testing Library were rejected; `__tests__/` folders and a top-level `tests/` were rejected.
+
+### 34. Request timeout
+- Context: a hung API kept the skeletons on screen forever.
+- Decision: `httpProvider.get` times out after `config.httpTimeoutMs` (5 s); `GetOptions.timeoutMs` overrides it per call. `AbortSignal.timeout` is combined with the caller's signal via `AbortSignal.any`, so canceling still works. A timeout throws `RequestTimeoutError` ("Request timed out after 5 s"); a cancel by the caller stays an `AbortError` and is not reported as a timeout.
+- Why: a hang becomes the usual error with Retry. 10 s and 30 s were rejected; a fixed timeout without override and per-call-only timeouts were rejected; passing the raw browser error through was rejected.
+
+### 35. `skip` past the last page jumps to the last page
+- Context: `?skip=500` showed "No products" although there are 194 (supersedes the "empty row" part of decision 12).
+- Decision: once the response shows that `skip` is past the last page, `useProductsList` corrects the URL to the last page with `replaceState`; until then the list reports loading, so no empty page flashes. Rules in the domain: `lastPageSkip(total)`, `isPastLastPage(skip, total)`. A search past the first page with no results goes to the first page and keeps `q`.
+- Why: the user always sees products, and Back doesn't return to the bad URL. A "This page doesn't exist" message with a button and jumping to the first page were rejected.
+
+### 36. Screen-reader support for the table
+- Context: loading and results weren't announced, and the table had no accessible name.
+- Decision: `aria-label="Products"` and `aria-busy` on the table; a visually hidden, always-mounted `role="status"` region announces results and page after each load and is empty while loading. Text comes from `describeResults()` (`ui/ProductsTable/resultsAnnouncement.ts`); the hiding style is `shared/ui/visuallyHidden.ts`.
+- Why: screen readers hear what changed without extra noise while paging. Announcing "Loading…" and announcing results without the page were rejected.
+
+### 37. Full-app tests
+- Context: the `*Container` components and the wiring between layers had no test.
+- Decision: `src/App.test.tsx` renders the real `App` and swaps only `productsRepository` for `createInMemoryProductsRepository(makeCatalog(45))` (real paging, sort, search, 404). It covers first page, paging, sorting, search with debounce and Clear search, opening and closing a product, restoring state from the URL, not found and Retry.
+- Why: one place that checks the whole flow end to end in jsdom, without mocking the URL, cache or `*Container` components.
+
+### 38. Containers live in `ui`, next to their component
+- Context: a separate `features/products/containers/` folder looked like its own layer, although containers are UI too (supersedes the folder part of decision 24).
+- Decision: each `*Container` sits in the folder of the component it wires: `ui/ProductsSearch/`, `ui/ProductsTable/`, `ui/ProductDialog/` (`ProductsSearch.tsx` moved into its own folder). Only `*Container` files import from `application`; the other components stay presentational. Dependency direction: `ui → application → domain ← infrastructure`.
+- Why: a component and its wiring are found together, with one layer fewer. A `ui/connected/` subfolder and merging each container into its component were rejected.
