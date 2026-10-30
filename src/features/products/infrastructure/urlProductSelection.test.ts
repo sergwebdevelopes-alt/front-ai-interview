@@ -24,6 +24,15 @@ describe('useUrlProductSelection', () => {
     expect(result.current).toMatchObject({ isOpen: true, productId: null })
   })
 
+  it.each(['<script>alert(1)</script>', '12abc', '12; DROP TABLE', 'javascript:alert(1)', '1e3x'])(
+    'treats the hostile productId %s as invalid',
+    (raw) => {
+      setUrl(`/?productId=${encodeURIComponent(raw)}`)
+      const { result } = renderHook(() => useUrlProductSelection())
+      expect(result.current).toMatchObject({ isOpen: true, productId: null })
+    },
+  )
+
   it('opens with a new history entry and closes', () => {
     setUrl('/?skip=20')
     const { result } = renderHook(() => useUrlProductSelection())

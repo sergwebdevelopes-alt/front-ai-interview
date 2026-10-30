@@ -82,6 +82,36 @@ describe('httpProvider.get', () => {
   })
 })
 
+describe('httpProvider.get param encoding', () => {
+  it('encodes HTML in a param value', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}))
+
+    await httpProvider.get('/products/search', { params: { q: '<script>alert(1)</script>' } })
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]))
+    expect(url.search).toBe('?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E')
+    expect(url.searchParams.get('q')).toBe('<script>alert(1)</script>')
+  })
+
+  it('keeps & and = inside a value instead of adding params', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}))
+
+    await httpProvider.get('/products/search', { params: { q: 'phone&limit=1000', limit: 20 } })
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]))
+    expect(url.searchParams.get('q')).toBe('phone&limit=1000')
+    expect(url.searchParams.getAll('limit')).toEqual(['20'])
+  })
+
+  it('stays on the API host', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}))
+
+    await httpProvider.get('/products/search', { params: { q: '//evil.example/x' } })
+
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).origin).toBe('https://api.test')
+  })
+})
+
 describe('httpProvider.get cancelation', () => {
   it('always passes a signal to fetch, even without a caller signal', async () => {
     fetchMock.mockResolvedValue(jsonResponse({}))

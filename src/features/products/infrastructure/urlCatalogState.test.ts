@@ -47,6 +47,38 @@ describe('useUrlCatalogState params', () => {
   })
 })
 
+describe('useUrlCatalogState with hostile input', () => {
+  it('ignores a script in sortBy or order', () => {
+    setUrl(`/?sortBy=${encodeURIComponent('<script>alert(1)</script>')}&order=asc`)
+    expect(renderHook(() => useUrlCatalogState()).result.current.params.sort).toBeNull()
+
+    setUrl(`/?sortBy=price&order=${encodeURIComponent('asc"><script>')}`)
+    expect(renderHook(() => useUrlCatalogState()).result.current.params.sort).toBeNull()
+  })
+
+  it('turns a script in skip into the first page', () => {
+    setUrl(`/?skip=${encodeURIComponent('<script>alert(1)</script>')}`)
+    expect(renderHook(() => useUrlCatalogState()).result.current.params.skip).toBe(0)
+  })
+
+  it('keeps a script in q as a plain string', () => {
+    setUrl(`/?q=${encodeURIComponent(' <script>alert(1)</script> ')}`)
+    expect(renderHook(() => useUrlCatalogState()).result.current.params.query).toBe('<script>alert(1)</script>')
+  })
+
+  it('writes a hostile query encoded and on the same page', () => {
+    const { result } = renderHook(() => useUrlCatalogState())
+    const { origin, pathname } = window.location
+
+    act(() => result.current.update({ query: '<script>alert(1)</script>&skip=40' }))
+
+    expect(window.location.origin).toBe(origin)
+    expect(window.location.pathname).toBe(pathname)
+    expect(urlParams().get('q')).toBe('<script>alert(1)</script>&skip=40')
+    expect(urlParams().has('skip')).toBe(false)
+  })
+})
+
 describe('useUrlCatalogState update', () => {
   it('writes only the fields in the patch', () => {
     setUrl('/?q=phone&skip=20')
