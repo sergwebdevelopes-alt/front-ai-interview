@@ -22,7 +22,7 @@ src/
       useRequest.ts               # abort, request key, retry, loading/error, cache
       useDebouncedCallback.ts     # debounced function with cancel
       useLastActiveValue.ts       # last value while active (dialog content during close)
-    cache/requestCache.ts         # in-memory cache: 5 min fresh, 50 entries
+    cache/requestCache.ts         # in-memory cache: 5 min fresh, 50 entries; clear() for tests
     errors/toError.ts             # unknown → Error
     ui/
       ErrorAlert.tsx              # error Alert with a Retry button
@@ -51,9 +51,15 @@ src/
       ProductsSearch.tsx
       ProductsTable/              # ProductsTable, columns (config, px widths), TableStateRows, SingleLineText
       ProductDialog/              # ProductDialog, LazyProductDialog, one component per section, Section/InfoRow
+  test/                           # test-only helpers (not in the app build)
+    setup.ts                      # jest-dom matchers; after each test: cleanup, cache clear, URL reset
+    fakeProductsRepository.ts     # typed vi.fn repository + deferred()
+    productFixtures.ts            # makeListItem(), makeProduct()
   App.tsx                         # layout only: renders the containers
   main.tsx                        # theme, CssBaseline, root ErrorBoundary
 ```
+
+Tests live next to the code as `*.test.ts(x)` (for example `domain/sort.test.ts`, `ui/ProductsTable/ProductsTable.test.tsx`).
 
 ### Layers and data flow
 
@@ -89,7 +95,7 @@ Imports: anything that leaves the current folder uses the `@/` alias for `src/` 
 
 ### Definition of done
 
-The candidate reviews each chunk manually and approves it. `npm run typecheck` and `npm run lint` must pass (AGENTS.md).
+The candidate reviews each chunk manually and approves it. `npm run typecheck` and `npm run lint` must pass (AGENTS.md), and so must `npm test`. Every new or changed behaviour comes with tests.
 
 ## Decisions
 
@@ -254,3 +260,8 @@ Entries are added by the agent once the candidate confirms them. The format is d
 - Context: environment values shouldn't live in git.
 - Decision: `.env` is in `.gitignore`; `.env.example` with `VITE_API_BASE_URL` is committed, and the README says to copy it.
 - Why: each environment keeps its own values; the template documents which variables are needed.
+
+### 33. Tests
+- Context: the project had no test runner; the code should be covered by tests.
+- Decision: Vitest + Testing Library (`@testing-library/react`, `user-event`, `jest-dom`) + jsdom as exact-version devDependencies. Config in `vite.config.ts` (`test` block, reuses the `@/` alias and React plugin); `tsconfig.test.json` type-checks tests, `tsconfig.app.json` excludes them. Tests live next to the code as `*.test.ts(x)` and cover every layer: domain, shared, infrastructure, application, ui. Use-case tests swap only `productsRepository` by mocking `infrastructure/index.ts` and keep the real URL hooks; `requestCache.clear()` runs after each test. Scripts: `npm test`, `npm run test:watch`.
+- Why: covers logic, hooks and components with the existing Vite setup. Vitest only (no hooks/components) and Vitest + jsdom without Testing Library were rejected; `__tests__/` folders and a top-level `tests/` were rejected.

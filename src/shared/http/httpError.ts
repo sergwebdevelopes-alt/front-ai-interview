@@ -8,6 +8,16 @@ export class HttpError extends Error {
   }
 }
 
+export class RequestTimeoutError extends Error {
+  timeoutMs: number
+
+  constructor(timeoutMs: number) {
+    super(`Request timed out after ${timeoutMs / 1000} s`)
+    this.name = 'RequestTimeoutError'
+    this.timeoutMs = timeoutMs
+  }
+}
+
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json()

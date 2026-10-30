@@ -3,6 +3,7 @@ export type QueryParams = Record<string, string | number | undefined>
 export type GetOptions = {
   params?: QueryParams
   signal?: AbortSignal
+  timeoutMs?: number
 }
 
 export interface HttpProvider {

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { HttpError, toHttpError } from './httpError.ts'
+import { HttpError, RequestTimeoutError, toHttpError } from './httpError.ts'
+
+describe('RequestTimeoutError', () => {
+  it('describes the timeout in seconds', () => {
+    const error = new RequestTimeoutError(5000)
+    expect(error).toBeInstanceOf(Error)
+    expect(error.name).toBe('RequestTimeoutError')
+    expect(error.timeoutMs).toBe(5000)
+    expect(error.message).toBe('Request timed out after 5 s')
+  })
+})
 
 describe('toHttpError', () => {
   it('uses the message from a JSON body', async () => {
