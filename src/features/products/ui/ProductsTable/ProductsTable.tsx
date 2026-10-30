@@ -1,4 +1,5 @@
 import {
+  Box,
   Paper,
   Table,
   TableBody,
@@ -11,9 +12,11 @@ import {
 } from '@mui/material'
 import { ErrorAlert } from '@/shared/ui/ErrorAlert.tsx'
 import { focusRing } from '@/shared/ui/focusRing.ts'
+import { visuallyHidden } from '@/shared/ui/visuallyHidden.ts'
 import type { ProductListItem } from '@/features/products/domain/product.ts'
 import type { ProductSort, SortField } from '@/features/products/domain/sort.ts'
 import { PRODUCT_COLUMNS, PRODUCT_TABLE_MIN_WIDTH } from './columns.tsx'
+import { describeResults } from './resultsAnnouncement.ts'
 import { EmptyRow, SkeletonRows } from './TableStateRows.tsx'
 
 type ProductsTableProps = {
@@ -53,8 +56,15 @@ export function ProductsTable({
 
   return (
     <Paper>
+      <Box role="status" sx={visuallyHidden}>
+        {isLoading || total === null ? '' : describeResults({ total, page, pageSize, query })}
+      </Box>
       <TableContainer>
-        <Table sx={{ tableLayout: 'fixed', minWidth: PRODUCT_TABLE_MIN_WIDTH }}>
+        <Table
+          aria-label="Products"
+          aria-busy={isLoading}
+          sx={{ tableLayout: 'fixed', minWidth: PRODUCT_TABLE_MIN_WIDTH }}
+        >
           <TableHead>
             <TableRow>
               {PRODUCT_COLUMNS.map(({ field, label, align, width }) => {

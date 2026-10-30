@@ -7,8 +7,8 @@ import { ProductsTable } from './ProductsTable.tsx'
 
 type Props = ComponentProps<typeof ProductsTable>
 
-function renderTable(overrides: Partial<Props> = {}) {
-  const props: Props = {
+function buildProps(overrides: Partial<Props> = {}): Props {
+  return {
     products: [
       makeListItem({ id: 1, brand: 'Apple', title: 'iPhone 9', price: 549 }),
       makeListItem({ id: 2, brand: undefined, title: 'Green Earring', category: 'womens-jewellery', price: 19.5 }),
@@ -27,6 +27,10 @@ function renderTable(overrides: Partial<Props> = {}) {
     onClearSearch: vi.fn(),
     ...overrides,
   }
+}
+
+function renderTable(overrides: Partial<Props> = {}) {
+  const props = buildProps(overrides)
   render(<ProductsTable {...props} />)
   return props
 }
@@ -70,13 +74,13 @@ describe('ProductsTable states', () => {
 
   it('shows "No products" for an empty catalog', () => {
     renderTable({ products: [], total: 0 })
-    expect(screen.getByText('No products')).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getByText('No products')).toBeInTheDocument()
   })
 
   it('shows "No results" with Clear search for an empty search', async () => {
     const props = renderTable({ products: [], total: 0, query: 'zzzz' })
 
-    expect(screen.getByText('No results for “zzzz”')).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getByText('No results for “zzzz”')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Clear search' }))
 
     expect(props.onClearSearch).toHaveBeenCalledOnce()
@@ -90,6 +94,48 @@ describe('ProductsTable states', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     expect(props.onRetry).toHaveBeenCalledOnce()
+  })
+})
+
+describe('ProductsTable accessibility', () => {
+  it('has an accessible name', () => {
+    renderTable()
+    expect(screen.getByRole('table', { name: 'Products' })).toBeInTheDocument()
+  })
+
+  it('marks the table busy only while loading', () => {
+    renderTable({ isLoading: true, products: [] })
+    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'true')
+  })
+
+  it('is not busy once loaded', () => {
+    renderTable()
+    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'false')
+  })
+
+  it('announces the loaded results and page', () => {
+    renderTable({ page: 1 })
+    expect(screen.getByRole('status')).toHaveTextContent('194 products, page 2 of 10')
+  })
+
+  it('announces search results', () => {
+    renderTable({ total: 23, query: 'phone' })
+    expect(screen.getByRole('status')).toHaveTextContent('23 results for “phone”, page 1 of 2')
+  })
+
+  it('announces nothing while loading', () => {
+    renderTable({ isLoading: true, products: [] })
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+  })
+
+  it('keeps the live region mounted between loading and loaded', () => {
+    const { rerender } = render(<ProductsTable {...buildProps({ isLoading: true, products: [] })} />)
+    const region = screen.getByRole('status')
+
+    rerender(<ProductsTable {...buildProps()} />)
+
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region).toHaveTextContent('194 products, page 1 of 10')
   })
 })
 
