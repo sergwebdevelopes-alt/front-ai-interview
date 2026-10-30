@@ -67,6 +67,15 @@ describe('httpProvider.get', () => {
     await expect(request).rejects.toMatchObject({ status: 404, message: 'Not found' })
   })
 
+  it('rejects a 2xx response with an invalid JSON body', async () => {
+    fetchMock.mockResolvedValue(new Response('<html>not json</html>', { status: 200 }))
+
+    const request = httpProvider.get('/products')
+
+    await expect(request).rejects.toBeInstanceOf(SyntaxError)
+    await expect(request).rejects.not.toBeInstanceOf(RequestTimeoutError)
+  })
+
   it('lets fetch errors through', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
     await expect(httpProvider.get('/products')).rejects.toThrow('Failed to fetch')
