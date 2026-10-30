@@ -51,6 +51,14 @@ describe('requestCache', () => {
     expect(requestCache.peek('key-1')).toBeNull()
   })
 
+  it('clears all entries', () => {
+    requestCache.set('a', 1)
+    requestCache.set('b', 2)
+    requestCache.clear()
+    expect(requestCache.peek('a')).toBeNull()
+    expect(requestCache.peek('b')).toBeNull()
+  })
+
   it('invalidates an entry', () => {
     requestCache.set('a', 'data')
     requestCache.invalidate('a')

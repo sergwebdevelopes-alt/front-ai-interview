@@ -31,4 +31,8 @@ function invalidate(key: string): void {
   entries.delete(key)
 }
 
-export const requestCache = { peek, isFresh, set, invalidate }
+function clear(): void {
+  entries.clear()
+}
+
+export const requestCache = { peek, isFresh, set, invalidate, clear }
